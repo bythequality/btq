@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>바이더퀄리티 근태관리 자동화</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #f8f7f4;
+    --surface: #ffffff;
+    --surface2: #f2f1ee;
+    --border: #e2e0da;
+    --border2: #cbc9c2;
+    --text: #1a1916;
+    --text2: #6b6963;
+    --text3: #9b9890;
+    --accent: #2563eb;
+    --accent-bg: #eff6ff;
+    --accent-text: #1d4ed8;
+    --danger: #dc2626;
+    --danger-bg: #fef2f2;
+    --danger-text: #991b1b;
+    --warn: #d97706;
+    --warn-bg: #fffbeb;
+    --warn-text: #92400e;
+    --success: #16a34a;
+    --success-bg: #f0fdf4;
+    --success-text: #166534;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; min-height: 100vh; }
+
+  .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 32px; height: 56px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 100; }
+  .topbar-logo { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+  .topbar-sub { font-size: 12px; color: var(--text3); margin-left: 2px; }
+  .topbar-tag { margin-left: auto; font-size: 11px; background: var(--accent-bg); color: var(--accent-text); padding: 3px 10px; border-radius: 20px; font-weight: 500; }
+
+  .layout { display: grid; grid-template-columns: 320px 1fr; min-height: calc(100vh - 56px); }
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 24px 20px; overflow-y: auto; }
+  .main { padding: 28px 32px; overflow-y: auto; }
+
+  .section-title { font-size: 11px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--text3); margin: 20px 0 10px; }
+  .section-title:first-child { margin-top: 0; }
+
+  .upload-card { border: 1.5px dashed var(--border2); border-radius: var(--radius); padding: 16px; cursor: pointer; transition: all 0.15s; background: var(--bg); }
+  .upload-card:hover { border-color: var(--accent); background: var(--accent-bg); }
+  .upload-card.has-file { border-style: solid; border-color: var(--success); background: var(--success-bg); }
+  .upload-card input { display: none; }
+  .upload-icon { font-size: 22px; margin-bottom: 6px; }
+  .upload-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .upload-desc { font-size: 11px; color: var(--text3); }
+  .upload-file-name { font-size: 12px; color: var(--success-text); font-weight: 500; margin-top: 6px; word-break: break-all; }
+
+  .config-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .config-row label { font-size: 12px; color: var(--text2); white-space: nowrap; min-width: 56px; }
+  select, input[type="text"] { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; background: var(--surface); color: var(--text); outline: none; font-family: inherit; }
+  select:focus, input:focus { border-color: var(--accent); }
+
+  .flex-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 4px; }
+  .flex-btn { padding: 8px 4px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; cursor: pointer; background: var(--surface); color: var(--text2); text-align: center; transition: all 0.12s; }
+  .flex-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .flex-btn.active { background: var(--accent); border-color: var(--accent); color: white; font-weight: 600; }
+  .flex-btn .time-label { font-size: 10px; opacity: 0.8; }
+
+  .member-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .member-chip { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: var(--surface2); color: var(--text2); border: 1px solid var(--border); cursor: pointer; transition: all 0.1s; }
+  .member-chip.active { background: var(--accent-bg); color: var(--accent-text); border-color: var(--accent); }
+
+  .run-btn { width: 100%; padding: 13px; background: var(--accent); color: white; border: none; border-radius: var(--radius); font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 20px; transition: opacity 0.15s; letter-spacing: -0.2px; }
+  .run-btn:hover { opacity: 0.9; }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .progress-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 12px; overflow: hidden; display: none; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 2px; width: 0; transition: width 0.4s ease; }
+
+  .page-title { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 4px; }
+  .page-desc { font-size: 13px; color: var(--text2); margin-bottom: 24px; }
+
+  .empty-state { text-align: center; padding: 80px 24px; }
+  .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
+  .empty-title { font-size: 16px; font-weight: 600; color: var(--text2); margin-bottom: 6px; }
+  .empty-desc { font-size: 13px; color: var(--text3); line-height: 1.8; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+  .stat-val { font-size: 28px; font-weight: 700; letter-spacing: -1px; line-height: 1; margin-bottom: 4px; }
+  .stat-lbl { font-size: 11px; color: var(--text3); font-weight: 500; }
+  .stat-card.danger .stat-val { color: var(--danger); }
+  .stat-card.warn .stat-val { color: var(--warn); }
+  .stat-card.accent .stat-val { color: var(--accent); }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 20px; overflow: hidden; }
+  .panel-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .panel-title { font-size: 13px; font-weight: 700; }
+  .panel-body { padding: 0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { padding: 9px 12px; background: var(--surface2); font-size: 11px; font-weight: 600; color: var(--text3); text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg); }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .badge-late { background: var(--danger-bg); color: var(--danger-text); }
+  .badge-off { background: var(--warn-bg); color: var(--warn-text); }
+  .badge-ok { background: var(--success-bg); color: var(--success-text); }
+  .badge-out { background: var(--accent-bg); color: var(--accent-text); }
+  .badge-half { background: #f3f4f6; color: #374151; }
+
+  .dl-row { display: flex; gap: 10px; margin-bottom: 20px; }
+  .dl-btn { flex: 1; padding: 12px; border: 1.5px solid var(--border2); border-radius: var(--radius); background: var(--surface); cursor: pointer; text-align: left; transition: all 0.12s; }
+  .dl-btn:hover { border-color: var(--accent); background: var(--accent-bg); }
+  .dl-btn .dl-icon { font-size: 20px; margin-bottom: 4px; }
+  .dl-btn .dl-title { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+  .dl-btn .dl-desc { font-size: 11px; color: var(--text3); }
+
+  .log-area { background: #1e1e1e; color: #d4d4d4; border-radius: var(--radius); padding: 14px 16px; font-family: 'Menlo', 'Courier New', monospace; font-size: 12px; line-height: 1.8; min-height: 80px; max-height: 200px; overflow-y: auto; margin-top: 12px; white-space: pre-wrap; }
+  .log-area .log-ok { color: #4ec9b0; }
+  .log-area .log-warn { color: #dcdcaa; }
+  .log-area .log-err { color: #f48771; }
+
+  .tab-bar { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 0; }
+  .tab { padding: 10px 16px; font-size: 12px; font-weight: 600; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.12s; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-content { padding: 16px; display: none; max-height: 400px; overflow-y: auto; }
+  .tab-content.active { display: block; }
+
+  .name-cell { font-weight: 600; }
+  .date-cell { color: var(--text3); font-size: 11px; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { border-right: none; border-bottom: 1px solid var(--border); }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .dl-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-logo">바이더퀄리티</div>
+  <div class="topbar-sub">근태관리 자동화</div>
+  <div class="topbar-tag">By The Quality · 내부용</div>
+</div>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="section-title">📁 파일 업로드</div>
+
+    <div class="upload-card" id="zone-kakao" onclick="document.getElementById('file-kakao').click()" style="margin-bottom:10px;">
+      <input type="file" id="file-kakao" accept=".txt" onchange="loadKakao(this)">
+      <div class="upload-icon">💬</div>
+      <div class="upload-title">카카오톡 단톡방</div>
+      <div class="upload-desc">카카오톡 → 대화 내보내기 → 메모장 (.txt)</div>
+      <div class="upload-file-name" id="kakao-name"></div>
+    </div>
+
+    <div class="upload-card" id="zone-raw" onclick="document.getElementById('file-raw').click()" style="margin-bottom:10px;">
+      <input type="file" id="file-raw" accept=".xlsx,.xls" onchange="loadRaw(this)">
+      <div class="upload-icon">🏢</div>
+      <div class="upload-title">지문인식 출퇴근 데이터 (선택)</div>
+      <div class="upload-desc">2026년_X월_근태.xls</div>
+      <div class="upload-file-name" id="raw-name"></div>
+    </div>
+
+    <div class="section-title" style="margin-top:24px;">⚙️ 분석 설정</div>
+
+    <div class="config-row">
+      <label>연도</label>
+      <select id="sel-year">
+        <option value="2026">2026년</option>
+        <option value="2025">2025년</option>
+      </select>
+    </div>
+    <div class="config-row">
+      <label>월</label>
+      <select id="sel-month">
+        <option value="4">4월</option>
+        <option value="3">3월</option>
+        <option value="5">5월</option>
+        <option value="6">6월</option>
+        <option value="7">7월</option>
+        <option value="8">8월</option>
+      </select>
+    </div>
+
+    <div class="section-title" style="margin-top:16px;">⏰ 탄력근무 기준</div>
+    <div class="flex-grid" id="flex-grid"></div>
+    <div style="font-size:11px; color:var(--text3); margin-top:4px;">카카오톡에 별도 시간 공지 없으면 이 기준 적용</div>
+
+    <div class="section-title" style="margin-top:16px;">👥 직원 목록</div>
+    <div style="font-size:11px; color:var(--text3); margin-bottom:6px;">분석에서 제외할 직원 클릭</div>
+    <div class="member-list" id="member-list"></div>
+
+    <button class="run-btn" id="run-btn" onclick="runAll()" disabled>
+      🔍 근태 분석 시작
+    </button>
+    <div class="progress-bar" id="progress-bar">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+    <div class="log-area" id="log-area">대기 중...</div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div id="empty-state" class="empty-state">
+      <div class="empty-icon">📊</div>
+      <div class="empty-title">파일을 업로드하고 분석을 시작하세요</div>
+      <div class="empty-desc">
+        카카오톡 단톡방 내보내기 파일(.txt)을 업로드하면<br>
+        자동으로 해당 월의 근태를 분석하고<br>
+        출퇴근부 + 통계 엑셀 파일을 생성합니다
+      </div>
+    </div>
+
+    <div id="result-area" style="display:none;">
+      <div class="page-title" id="result-title">2026년 4월 근태 분석</div>
+      <div class="page-desc" id="result-desc"></div>
+
+      <div class="dl-row">
+        <button class="dl-btn" onclick="downloadAttendance()">
+          <div class="dl-icon">📥</div>
+          <div class="dl-title">출퇴근부 다운로드</div>
+          <div class="dl-desc">엔제이코스랩_출퇴근부.xlsx</div>
+        </button>
+        <button class="dl-btn" onclick="downloadStats()">
+          <div class="dl-icon">📊</div>
+          <div class="dl-title">통계 보고서 다운로드</div>
+          <div class="dl-desc">출퇴근부_통계_최종.xlsx</div>
+        </button>
+        <button class="dl-btn" onclick="downloadHolidayDetail()">
+          <div class="dl-icon">📋</div>
+          <div class="dl-title">휴무 상세 내역 다운로드</div>
+          <div class="dl-desc">휴무_상세_내역_카톡내용.xlsx</div>
+        </button>
+      </div>
+
+      <div class="stats-grid" id="stats-grid"></div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">직원별 근태 요약</div>
+          <div style="font-size:11px; color:var(--text3);" id="summary-period"></div>
+        </div>
+        <div class="tab-bar">
+          <div class="tab active" onclick="switchTab('summary')">요약</div>
+          <div class="tab" onclick="switchTab('detail')">일자별 상세</div>
+          <div class="tab" onclick="switchTab('holiday')">휴무/연차 목록</div>
+          <div class="tab" onclick="switchTab('late')">지각 목록</div>
+        </div>
+        <div class="tab-content active" id="tab-summary"></div>
+        <div class="tab-content" id="tab-detail"></div>
+        <div class="tab-content" id="tab-holiday"></div>
+        <div class="tab-content" id="tab-late"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 상수 ──────────────────────────────────────────
+const MEMBERS = [
+  {name:'김민경', id:'5034', pos:'과장'},
+  {name:'이슬',   id:'0882', pos:'차장'},
+  {name:'전지영', id:'6555', pos:'과장'},
+  {name:'김진호', id:'0652', pos:'과장'},
+  {name:'장하늘', id:'8121', pos:'대리'},
+  {name:'홍미정', id:'5950', pos:'부장'},
+  {name:'이민영', id:'1789', pos:'주임'},
+  {name:'이진희', id:'2481', pos:'주임'},
+  {name:'김정아', id:'9401', pos:'주임'},
+  {name:'남준성', id:'3826', pos:'사원'},
+];
+
+const ALIASES = {
+  '김민경과장님(바더퀄)':'김민경','이슬차장님(바더퀄)':'이슬','전지영과장님(바더퀄)':'전지영',
+  '김진호 과장님(바더퀄)':'김진호','장하늘 대리님(바더퀄)':'장하늘','홍미정 부장님(바더퀄)':'홍미정',
+  '이민영 주임님(바더퀄)':'이민영','이진희':'이진희','김정아 주임님(바더퀄)':'김정아',
+  '남준성님(바더퀄)':'남준성',
+};
+
+const FLEX_OPTIONS = [
+  {label:'7~16시', std:'07:00'},
+  {label:'8~17시', std:'08:00'},
+  {label:'9~18시', std:'09:00'},
+  {label:'10~19시', std:'10:00'},
+  {label:'11~20시', std:'11:00'},
+];
+
+let flexStd = '09:00';
+let kakaoText = '';
+let rawData = [];
+let analysisResult = null;
+let excludedMembers = new Set();
+
+// ── 초기화 ──────────────────────────────────────────
+function init() {
+  // Flex grid
+  const fg = document.getElementById('flex-grid');
+  FLEX_OPTIONS.forEach(f => {
+    const btn = document.createElement('div');
+    btn.className = 'flex-btn' + (f.std === flexStd ? ' active' : '');
+    btn.innerHTML = `${f.label}<br><span class="time-label">${f.std} 기준</span>`;
+    btn.onclick = () => { flexStd = f.std; renderFlexGrid(); };
+    fg.appendChild(btn);
+  });
+
+  // Member list
+  const ml = document.getElementById('member-list');
+  MEMBERS.forEach(m => {
+    const chip = document.createElement('span');
+    chip.className = 'member-chip active';
+    chip.textContent = m.name;
+    chip.dataset.name = m.name;
+    chip.onclick = () => {
+      if (excludedMembers.has(m.name)) { excludedMembers.delete(m.name); chip.classList.add('active'); }
+      else { excludedMembers.add(m.name); chip.classList.remove('active'); }
+    };
+    ml.appendChild(chip);
+  });
+}
+
+function renderFlexGrid() {
+  const btns = document.querySelectorAll('.flex-btn');
+  btns.forEach((btn, i) => {
+    btn.className = 'flex-btn' + (FLEX_OPTIONS[i].std === flexStd ? ' active' : '');
+  });
+}
+
+// ── 파일 로드 ──────────────────────────────────────────
+function loadKakao(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    kakaoText = e.target.result;
+    setFileOk('zone-kakao', 'kakao-name', file.name);
+    checkReady();
+    log(`✓ 카카오톡 파일 로드: ${file.name} (${(file.size/1024).toFixed(0)}KB)`, 'ok');
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+function loadRaw(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+    const ws = wb.Sheets[wb.SheetNames.find(s => s !== 'Sheet1') || wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    rawData = rows.slice(1).filter(r => r[0]).map(r => ({
+      date: formatDateStr(r[0]),
+      name: String(r[3]||'').trim(),
+      inTime: String(r[8]||''),
+      outTime: String(r[10]||''),
+    }));
+    setFileOk('zone-raw', 'raw-name', file.name);
+    log(`✓ 지문인식 데이터 로드: ${rawData.length}건`, 'ok');
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function excelDateToStr(v) {
+  if (typeof v === 'string' && v.includes('2026')) return v.slice(0,10);
+  if (typeof v === 'number') {
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    return d.toISOString().slice(0,10);
+  }
+  return String(v).slice(0,10);
+}
+
+function formatDateStr(v) {
+  if (!v) return '';
+  const s = String(v);
+  const m = s.match(/(\d{4})년\s*(\d{2})월\s*(\d{2})일/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return s.slice(0,10);
+}
+
+function setFileOk(zoneId, nameId, filename) {
+  document.getElementById(zoneId).classList.add('has-file');
+  document.getElementById(nameId).textContent = '✓ ' + filename;
+}
+
+function checkReady() {
+  document.getElementById('run-btn').disabled = !kakaoText;
+}
+
+// ── 로그 ──────────────────────────────────────────
+function log(msg, type='') {
+  const el = document.getElementById('log-area');
+  const span = document.createElement('span');
+  if (type) span.className = `log-${type}`;
+  span.textContent = msg;
+  el.appendChild(span);
+  el.appendChild(document.createTextNode('\n'));
+  el.scrollTop = el.scrollHeight;
+}
+function clearLog() { document.getElementById('log-area').textContent = ''; }
+
+function setProgress(pct) {
+  const bar = document.getElementById('progress-bar');
+  bar.style.display = 'block';
+  document.getElementById('progress-fill').style.width = pct + '%';
+  if (pct >= 100) setTimeout(() => bar.style.display = 'none', 600);
+}
+
+// ── 카카오톡 파싱 ──────────────────────────────────────────
+function resolveName(raw) {
+  if (ALIASES[raw]) return ALIASES[raw];
+  for (const [alias, name] of Object.entries(ALIASES)) {
+    if (raw.includes(alias.replace(' ','')) || raw === alias) return name;
+  }
+  for (const m of MEMBERS) {
+    if (raw.includes(m.name)) return m.name;
+  }
+  return null;
+}
+
+function parseKakao(text, year, month) {
+  const lines = text.split(/\r?\n/);
+  let currentDate = null;
+  let inTarget = false;
+  const records = [];
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const secMatch = line.match(/^-{3,}\s*(\d{4})년\s*(\d+)월\s*(\d+)일/);
+    if (secMatch) {
+      const y = +secMatch[1], mo = +secMatch[2], d = +secMatch[3];
+      inTarget = (y === year && mo === month);
+      if (inTarget) currentDate = `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      continue;
+    }
+    if (!inTarget || !currentDate) continue;
+
+    const msgMatch = line.match(/^\[(.+?)\]\s*\[(오전|오후)\s*(\d+):(\d+)\]\s*([\s\S]*)/);
+    if (!msgMatch) continue;
+
+    const rawName = msgMatch[1].trim();
+    const ampm = msgMatch[2];
+    let hour = +msgMatch[3];
+    const min = +msgMatch[4];
+    const content = msgMatch[5].trim();
+
+    if (ampm === '오후' && hour !== 12) hour += 12;
+    if (ampm === '오전' && hour === 12) hour = 0;
+    const timeStr = `${String(hour).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
+
+    const name = resolveName(rawName);
+    if (!name) continue;
+
+    records.push({ date: currentDate, name, time: timeStr, msg: content });
+  }
+  return records;
+}
+
+// ── 근태 분석 ──────────────────────────────────────────
+function classifyMsg(msg) {
+  const t = msg;
+  if (/강제휴무|강제휴가|강제연차/.test(t)) return '강제휴무';
+  if (/오전\s*반반차/.test(t)) return '오전반반차';
+  if (/오후\s*반반차/.test(t)) return '오후반반차';
+  if (/반반차/.test(t)) return '반반차';
+  if (/오전\s*반차/.test(t)) return '오전반차';
+  if (/오후\s*반차/.test(t)) return '오후반차';
+  if (/반차/.test(t)) return '반차';
+  if (/연차/.test(t)) return '연차';
+  if (/휴무|휴가/.test(t)) return '휴무';
+  if (/외근|현지출근/.test(t)) return '외근';
+  return null;
+}
+
+function extractCustomTime(msg) {
+  const m = msg.match(/(\d+)시\s*(\d+)?분?\s*출근/);
+  if (!m) return null;
+  const h = +m[1], min2 = m[2] ? +m[2] : 0;
+  return `${String(h).padStart(2,'0')}:${String(min2).padStart(2,'0')}`;
+}
+
+function timeToMinutes(t) {
+  if (!t) return null;
+  const parts = t.split(':');
+  return +parts[0] * 60 + +parts[1];
+}
+
+function analyzeAttendance(kakaoRecords, year, month) {
+  const LATE_GRACE = 5;
+
+  // Group by date + name
+  const map = {};
+  kakaoRecords.forEach(r => {
+    const key = `${r.date}|${r.name}`;
+    if (!map[key]) map[key] = { date: r.date, name: r.name, msgs: [] };
+    map[key].msgs.push(r);
+  });
+
+  // Merge raw fingerprint data
+  rawData.forEach(rd => {
+    if (!rd.date.startsWith(`${year}-${String(month).padStart(2,'0')}`)) return;
+    const cleanName = rd.name.trim().replace(/\s+/g, '');
+    MEMBERS.forEach(m => {
+      if (cleanName === m.name.replace(/\s+/g,'')) {
+        const key = `${rd.date}|${m.name}`;
+        if (!map[key]) map[key] = { date: rd.date, name: m.name, msgs: [] };
+        map[key].fingerIn = rd.inTime;
+        map[key].fingerOut = rd.outTime;
+      }
+    });
+  });
+
+  const results = Object.values(map).sort((a,b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
+
+  results.forEach(r => {
+    let type = '정상';
+    let customTime = null;
+    let noteArr = [];
+
+    // Analyze messages
+    r.msgs.forEach(m => {
+      const cls = classifyMsg(m.msg);
+      if (cls) type = cls;
+      const ct = extractCustomTime(m.msg);
+      if (ct) customTime = ct;
+      if (/외근|현지출근/.test(m.msg)) noteArr.push('외근');
+      if (/현지퇴근/.test(m.msg)) noteArr.push('현지퇴근');
+      if (/세미나|교육|출장/.test(m.msg)) noteArr.push('교육');
+    });
+
+    // Determine effective start time
+    // customTime = 카카오에서 "10시 출근" 등으로 공지한 시간 → 이게 그날의 기준
+    let effectiveTime = customTime || flexStd;
+    let fingerInTime = null;
+    if (r.fingerIn && r.fingerIn.match(/\d+:\d+/)) {
+      fingerInTime = r.fingerIn.slice(0,5);
+    }
+
+    // Late check
+    // 핵심: 지각 기준 = effectiveTime (카카오 공지 시간 or 탄력근무 기본값)
+    // 지문 데이터가 있으면 실제 찍힌 시간 vs effectiveTime 비교
+    // 지문 데이터 없으면 카카오 공지가 곧 출근 확인이므로 지각 아님
+    const offTypes = ['연차','휴무','강제휴무','오전반차','오후반차','반차','반반차','오전반반차','오후반반차'];
+    let isLate = false;
+    if (!offTypes.includes(type)) {
+      const effectiveMin = timeToMinutes(effectiveTime);
+      if (fingerInTime) {
+        // 지문 데이터 있음 → 실제 출근 시간이 effectiveTime 초과하면 지각
+        const fingerMin = timeToMinutes(fingerInTime);
+        if (fingerMin !== null && effectiveMin !== null && fingerMin > effectiveMin + LATE_GRACE) isLate = true;
+      }
+      // 지문 데이터 없고 카카오로 출근 공지한 경우 → 지각 아님 (공지 자체가 출근 인증)
+      // 단, 카카오 메시지에 명시적으로 "지각" 또는 "늦" 키워드 있으면 지각 처리
+      if (!fingerInTime && r.msgs.some(m => /지각|늦었|늦을/.test(m.msg))) {
+        isLate = true;
+      }
+    }
+
+    r.type = type;
+    r.customTime = customTime;
+    r.effectiveTime = effectiveTime;
+    r.fingerInTime = fingerInTime;
+    r.fingerOutTime = r.fingerOut ? r.fingerOut.slice(0,5) : null;
+    r.isLate = isLate;
+    r.notes = [...new Set(noteArr)].join(', ');
+  });
+
+  return results;
+}
+
+// ── 메인 실행 ──────────────────────────────────────────
+function runAll() {
+  clearLog();
+  setProgress(10);
+  log('분석 시작...', 'ok');
+
+  const year = +document.getElementById('sel-year').value;
+  const month = +document.getElementById('sel-month').value;
+
+  setTimeout(() => {
+    const kakaoRecs = parseKakao(kakaoText, year, month);
+    log(`카카오톡: ${kakaoRecs.length}건 메시지 추출 (${year}년 ${month}월)`, 'ok');
+    setProgress(40);
+
+    setTimeout(() => {
+      const activeMembers = MEMBERS.filter(m => !excludedMembers.has(m.name));
+      const results = analyzeAttendance(kakaoRecs, year, month).filter(r => !excludedMembers.has(r.name));
+      analysisResult = { results, year, month, activeMembers };
+
+      const lateCount = results.filter(r => r.isLate).length;
+      const offCount = results.filter(r => ['연차','휴무','강제휴무'].includes(r.type)).length;
+      log(`분석 완료: 지각 ${lateCount}건, 휴무/연차 ${offCount}건`, 'ok');
+      setProgress(80);
+
+      setTimeout(() => {
+        renderResult(analysisResult);
+        setProgress(100);
+        log('✓ 완료! 결과를 확인하고 엑셀을 다운로드하세요.', 'ok');
+      }, 200);
+    }, 300);
+  }, 100);
+}
+
+// ── 결과 렌더링 ──────────────────────────────────────────
+function renderResult({ results, year, month, activeMembers }) {
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('result-area').style.display = 'block';
+  document.getElementById('result-title').textContent = `${year}년 ${month}월 근태 분석`;
+  document.getElementById('summary-period').textContent = `${year}년 ${month}월`;
+
+  const workDays = new Set(results.map(r => r.date)).size;
+  const lateTotal = results.filter(r => r.isLate).length;
+  const offTotal = results.filter(r => ['연차','휴무','강제휴무'].includes(r.type)).length;
+  const halfTotal = results.filter(r => r.type.includes('반차')).length;
+
+  document.getElementById('result-desc').textContent =
+    `총 ${workDays}일 분석 · 전체 ${results.length}건 근태 이벤트 처리`;
+
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card danger"><div class="stat-val">${lateTotal}</div><div class="stat-lbl">지각 건수</div></div>
+    <div class="stat-card warn"><div class="stat-val">${offTotal}</div><div class="stat-lbl">연차/휴무</div></div>
+    <div class="stat-card"><div class="stat-val">${halfTotal}</div><div class="stat-lbl">반차</div></div>
+    <div class="stat-card accent"><div class="stat-val">${workDays}</div><div class="stat-lbl">분석 근무일</div></div>
+  `;
+
+  // Summary tab
+  const memberStats = {};
+  activeMembers.forEach(m => { memberStats[m.name] = { late:0, off:0, half:0, outer:0, fingerMiss:0, late20:0 }; });
+  results.forEach(r => {
+    if (!memberStats[r.name]) memberStats[r.name] = { late:0, off:0, half:0, outer:0, fingerMiss:0, late20:0 };
+    const s = memberStats[r.name];
+    if (r.isLate) s.late++;
+    if (['연차','휴무','강제휴무'].includes(r.type)) s.off++;
+    if (r.type.includes('반차')) s.half++;
+    if (r.type === '외근') s.outer++;
+    if (!r.fingerInTime && !['연차','휴무','강제휴무'].includes(r.type)) s.fingerMiss++;
+    if (r.fingerOutTime) {
+      const outMin = timeToMinutes(r.fingerOutTime);
+      if (outMin && outMin >= 20*60) s.late20++;
+    }
+  });
+
+  const summaryRows = activeMembers.map(m => {
+    const s = memberStats[m.name] || {};
+    return `<tr>
+      <td class="name-cell">${m.name}</td>
+      <td><span style="font-size:11px; color:var(--text3)">${m.pos}</span></td>
+      <td>${s.late > 0 ? `<span class="badge badge-late">${s.late}회</span>` : '<span class="badge badge-ok">없음</span>'}</td>
+      <td>${s.off > 0 ? `<span class="badge badge-off">${s.off}일</span>` : '-'}</td>
+      <td>${s.half > 0 ? `<span class="badge badge-half">${s.half}회</span>` : '-'}</td>
+      <td>${s.outer > 0 ? `<span style="font-size:12px; color:var(--accent)">${s.outer}회</span>` : '-'}</td>
+      <td>${s.late20 > 0 ? `<span style="font-size:12px; color:var(--text2)">${s.late20}회</span>` : '-'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('tab-summary').innerHTML = `
+    <table>
+      <thead><tr><th>이름</th><th>직위</th><th>지각</th><th>연차/휴무</th><th>반차</th><th>외근</th><th>20시이후퇴근</th></tr></thead>
+      <tbody>${summaryRows}</tbody>
+    </table>`;
+
+  // Detail tab
+  const detailRows2 = results.map(r => {
+    const typeLabel = r.isLate && r.type === '정상' ? '지각' : r.type;
+    const badge = r.isLate ? 'badge-late' : (['연차','휴무','강제휴무'].includes(r.type) ? 'badge-off' : (r.type.includes('반차') ? 'badge-half' : (r.type === '외근' ? 'badge-out' : 'badge-ok')));
+    return `<tr>
+      <td class="date-cell">${r.date}</td>
+      <td class="name-cell">${r.name}</td>
+      <td><span class="badge ${badge}">${typeLabel}</span></td>
+      <td style="font-size:11px; color:var(--text2)">${r.fingerInTime || r.customTime || '-'}</td>
+      <td style="font-size:11px; color:var(--text2)">${r.fingerOutTime || '-'}</td>
+      <td style="font-size:11px; color:var(--text3)">${r.notes}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('tab-detail').innerHTML = `
+    <table>
+      <thead><tr><th>일자</th><th>이름</th><th>유형</th><th>출근</th><th>퇴근</th><th>비고</th></tr></thead>
+      <tbody>${detailRows2 || '<tr><td colspan="6" style="text-align:center; color:var(--text3); padding:20px">데이터 없음</td></tr>'}</tbody>
+    </table>`;
+
+  // Holiday tab
+  const holidays = results.filter(r => ['연차','휴무','강제휴무','오전반차','오후반차','반차','반반차','오전반반차','오후반반차'].includes(r.type));
+  document.getElementById('tab-holiday').innerHTML = holidays.length === 0 ? '<div style="padding:20px; text-align:center; color:var(--text3)">해당 없음</div>' : `
+    <table>
+      <thead><tr><th>일자</th><th>이름</th><th>유형</th><th>비고</th></tr></thead>
+      <tbody>${holidays.map(r => `<tr>
+        <td class="date-cell">${r.date}</td>
+        <td class="name-cell">${r.name}</td>
+        <td><span class="badge badge-off">${r.type}</span></td>
+        <td style="font-size:11px; color:var(--text3)">${r.notes}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+
+  // Late tab
+  const lates = results.filter(r => r.isLate);
+  document.getElementById('tab-late').innerHTML = lates.length === 0 ? '<div style="padding:20px; text-align:center; color:var(--success-text)">지각 없음 👏</div>' : `
+    <table>
+      <thead><tr><th>일자</th><th>이름</th><th>출근 시간</th><th>기준 시간</th><th>비고</th></tr></thead>
+      <tbody>${lates.map(r => `<tr>
+        <td class="date-cell">${r.date}</td>
+        <td class="name-cell">${r.name}</td>
+        <td style="color:var(--danger); font-weight:600">${r.fingerInTime || r.customTime || '-'}</td>
+        <td style="color:var(--text3)">${r.effectiveTime}</td>
+        <td style="font-size:11px; color:var(--text3)">${r.notes}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ── 엑셀 다운로드 ──────────────────────────────────────────
+
+// 셀 스타일 헬퍼
+function hdrStyle() {
+  return { font:{bold:true}, fill:{fgColor:{rgb:'D9E1F2'}}, alignment:{horizontal:'center',vertical:'center',wrapText:true}, border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}} };
+}
+function cellStyle(rgb) {
+  const s = { alignment:{vertical:'center'}, border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}} };
+  if (rgb) s.fill = {fgColor:{rgb}};
+  return s;
+}
+function applyStyles(ws, styles) {
+  styles.forEach(({cell, style}) => { if (ws[cell]) ws[cell].s = style; });
+}
+
+// ① 출퇴근부 — 기존과 동일한 시트 구조
+function downloadAttendance() {
+  if (!analysisResult) return;
+  const { results, year, month, activeMembers } = analysisResult;
+  const wb = XLSX.utils.book_new();
+  const monthLabel = `${month}월`;
+
+  // ─ 월별 통합 시트 ─
+  const mainData = [
+    ['근무일자','이름','직위','사원번호','출근시간','퇴근시간','근태유형','지각여부','비고']
+  ];
+  results.forEach(r => {
+    const m = MEMBERS.find(x => x.name === r.name) || {};
+    const lateFlag = r.isLate ? '지각' : '정상';
+    mainData.push([
+      r.date,
+      r.name,
+      m.pos || '',
+      m.id || '',
+      r.fingerInTime || r.customTime || '',
+      r.fingerOutTime || '',
+      r.type,
+      lateFlag,
+      r.notes || ''
+    ]);
+  });
+  const wsMain = XLSX.utils.aoa_to_sheet(mainData);
+  wsMain['!cols'] = [14,8,6,8,10,10,10,8,24].map(w => ({wch:w}));
+  wsMain['!rows'] = [{hpt:18}];
+  XLSX.utils.book_append_sheet(wb, wsMain, `${monthLabel} 출퇴근부`);
+
+  // ─ 직원별 개인 시트 (기존 형식: 일자·출근·퇴근·유형·지각·비고) ─
+  activeMembers.forEach(m => {
+    const mRows = results.filter(r => r.name === m.name);
+    const mData = [['일자','출근','퇴근','유형','지각','비고']];
+    mRows.forEach(r => {
+      mData.push([
+        r.date,
+        r.fingerInTime || r.customTime || '',
+        r.fingerOutTime || '',
+        r.type,
+        r.isLate ? '지각' : '',
+        r.notes || ''
+      ]);
+    });
+    const mws = XLSX.utils.aoa_to_sheet(mData);
+    mws['!cols'] = [12,8,8,12,6,20].map(w => ({wch:w}));
+    XLSX.utils.book_append_sheet(wb, mws, m.name);
+  });
+
+  XLSX.writeFile(wb, `(주)엔제이코스랩_출퇴근부_${year}년${month}월.xlsx`);
+}
+
+// ② 통계 보고서 — 기존 출퇴근부_통계_최종 형식 (시트: 통계 / 지각상세 / 지문누락)
+function downloadStats() {
+  if (!analysisResult) return;
+  const { results, year, month, activeMembers } = analysisResult;
+  const wb = XLSX.utils.book_new();
+  const offTypes = ['연차','휴무','강제휴무'];
+
+  // ── 통계 최종 시트 ──
+  const statTitle  = [null, `${year}.${month}월`, null, null, null, '(횟수)'];
+  const statHeader = [null,'사원번호','이름','지각','지문누락\n(출근)','퇴근\n(20시 이후)'];
+  const statData   = [statTitle, statHeader];
+  activeMembers.forEach(m => {
+    const mi = MEMBERS.find(x => x.name === m.name) || {};
+    const mRows = results.filter(r => r.name === m.name);
+    statData.push([null, mi.id||'', m.name,
+      mRows.filter(r => r.isLate).length,
+      mRows.filter(r => !r.fingerInTime && !offTypes.includes(r.type)).length,
+      mRows.filter(r => r.fingerOutTime && timeToMinutes(r.fingerOutTime) >= 20*60).length
+    ]);
+  });
+  const wsStat = XLSX.utils.aoa_to_sheet(statData);
+  wsStat['!cols'] = [3,10,8,6,10,12].map(w => ({wch:w}));
+  XLSX.utils.book_append_sheet(wb, wsStat, '통계');
+
+  // ── 지각 상세 ──
+  const lates = results.filter(r => r.isLate);
+  const wsLate = XLSX.utils.aoa_to_sheet([
+    ['일자','이름','출근시간','기준시간','비고'],
+    ...lates.map(r => [r.date, r.name, r.fingerInTime||r.customTime||'', r.effectiveTime, r.notes||''])
+  ]);
+  wsLate['!cols'] = [14,8,10,10,20].map(w => ({wch:w}));
+  XLSX.utils.book_append_sheet(wb, wsLate, '지각상세');
+
+  // ── 지문누락 ──
+  const missRows = results.filter(r => !r.fingerInTime && !offTypes.includes(r.type));
+  const wsMiss = XLSX.utils.aoa_to_sheet([
+    ['일자','이름','유형','비고'],
+    ...missRows.map(r => [r.date, r.name, r.type, r.notes||''])
+  ]);
+  wsMiss['!cols'] = [14,8,10,20].map(w => ({wch:w}));
+  XLSX.utils.book_append_sheet(wb, wsMiss, '지문누락');
+
+  XLSX.writeFile(wb, `출퇴근부_통계_${year}년${month}월_최종.xlsx`);
+}
+
+function downloadHolidayDetail() {
+  if (!analysisResult) return;
+  const { results, year, month } = analysisResult;
+  const wb = XLSX.utils.book_new();
+  const offTypes = ['연차','휴무','강제휴무','오전반차','오후반차','반차','반반차','오전반반차','오후반반차'];
+  const rows = results.filter(r => offTypes.includes(r.type) || r.isLate);
+  const data = [
+    [null,'일자','성명','비고'],
+    ...rows.map(r => [null, r.date, r.name,
+      r.isLate && !offTypes.includes(r.type) ? '지각' + (r.notes ? ' / '+r.notes : '') : r.type + (r.notes ? ' / '+r.notes : '')
+    ])
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [3,14,8,28].map(w => ({wch:w}));
+  XLSX.utils.book_append_sheet(wb, ws, '카톡');
+  XLSX.writeFile(wb, `${month}월_휴무_상세_내역_카톡내용.xlsx`);
+}
+
+// ── 시작 ──────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
